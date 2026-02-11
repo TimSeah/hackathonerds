@@ -6,24 +6,24 @@ label_index=0
 max_feature_idx=6
 objective=regression
 feature_names=Column_0 Column_1 Column_2 Column_3 Column_4 Column_5 Column_6
-feature_infos=none none none none none none none
-tree_sizes=240
+feature_infos=[0.746:0.97499999999999998] [0.68400000000000005:0.999] [0.19400000000000001:0.64700000000000002] [0.19600000000000001:0.32700000000000001] [0.79000000000000004:0.96399999999999997] [0.012:0.070000000000000007] none
+tree_sizes=310
 
 Tree=0
-num_leaves=1
+num_leaves=2
 num_cat=0
-split_feature=
-split_gain=
-threshold=
-decision_type=
-left_child=
-right_child=
-leaf_value=2.3955666522185006
-leaf_weight=
-leaf_count=24
-internal_value=
-internal_weight=
-internal_count=
+split_feature=2
+split_gain=0.18874
+threshold=0.42850000000000005
+decision_type=2
+left_child=-1
+right_child=-2
+leaf_value=2.3777292631566525 2.3839998878538609
+leaf_weight=24 24
+leaf_count=24 24
+internal_value=2.38086
+internal_weight=48
+internal_count=48
 is_linear=0
 shrinkage=1
 
@@ -31,6 +31,7 @@ shrinkage=1
 end of trees
 
 feature_importances:
+Column_2=1
 
 parameters:
 [boosting: gbdt]

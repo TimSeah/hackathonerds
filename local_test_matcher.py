@@ -11,14 +11,78 @@ from sklearn.model_selection import train_test_split
 
 fake = Faker()
 
-# Initialize OpenAI client (will use API key from environment)
+# Try to import Sentence Transformers for free local embeddings
 try:
-    openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    USE_OPENAI = os.getenv("OPENAI_API_KEY") is not None
-except:
-    USE_OPENAI = False
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
 
-print(f"OpenAI Integration: {'✓ Enabled' if USE_OPENAI else '✗ Using synthetic embeddings (set OPENAI_API_KEY to enable)'}")
+# Initialize OpenAI/OpenRouter client
+try:
+    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
+    
+    # Detect if using OpenRouter (key starts with sk-or- or OPENROUTER_API_KEY is set)
+    using_openrouter = (
+        os.getenv("OPENROUTER_API_KEY") is not None or 
+        (api_key and api_key.startswith("sk-or-"))
+    )
+    
+    if using_openrouter:
+        # OpenRouter configuration
+        openai_client = OpenAI(
+            api_key=api_key,
+            base_url="https://openrouter.ai/api/v1"
+        )
+        USE_OPENAI = True
+        EMBEDDING_MODE = "openrouter"
+        print("✓ OpenRouter Integration Enabled (using openai/text-embedding-3-small)")
+    elif api_key:
+        # Direct OpenAI configuration
+        openai_client = OpenAI(api_key=api_key)
+        USE_OPENAI = True
+        EMBEDDING_MODE = "openai"
+        print("✓ OpenAI Integration Enabled (using text-embedding-3-small)")
+    else:
+        USE_OPENAI = False
+        EMBEDDING_MODE = None
+except Exception as e:
+    USE_OPENAI = False
+    EMBEDDING_MODE = None
+
+# Initialize Sentence Transformer model as fallback (FREE!)
+sentence_model = None
+use_sentence_transformers = (
+    not USE_OPENAI and 
+    SENTENCE_TRANSFORMERS_AVAILABLE and 
+    os.getenv("SKIP_SENTENCE_TRANSFORMERS") != "1"
+)
+
+if use_sentence_transformers:
+    try:
+        print("📥 Loading local Sentence Transformer model (free, no API key needed)...")
+        print("   This may take a moment on first run (downloads ~90MB model)...")
+        print("   Note: If this hangs, set SKIP_SENTENCE_TRANSFORMERS=1")
+        # all-MiniLM-L6-v2: 384 dimensions, fast, good quality
+        sentence_model = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')  # Force CPU to avoid issues
+        EMBEDDING_MODE = "sentence_transformers"
+        print("✓ Sentence Transformers Loaded (100% FREE - runs locally)")
+        print("  Model: all-MiniLM-L6-v2 (384 dimensions)")
+    except Exception as e:
+        print(f"⚠️  Could not load Sentence Transformers: {e}")
+        print("   Falling back to synthetic embeddings")
+        EMBEDDING_MODE = "synthetic"
+elif not USE_OPENAI and not SENTENCE_TRANSFORMERS_AVAILABLE:
+    print("💡 Tip: Install sentence-transformers for FREE local embeddings:")
+    print("   pip install sentence-transformers")
+    EMBEDDING_MODE = "synthetic"
+elif not USE_OPENAI and os.getenv("SKIP_SENTENCE_TRANSFORMERS") == "1":
+    print("⏭️  Skipping Sentence Transformers (SKIP_SENTENCE_TRANSFORMERS=1)")
+    EMBEDDING_MODE = "synthetic"
+
+if EMBEDDING_MODE is None:
+    EMBEDDING_MODE = "synthetic"
+    print("✗ Using synthetic embeddings (set OPENAI_API_KEY, OPENROUTER_API_KEY, or install sentence-transformers)")
 
 # ---------------------------
 # CONFIG
@@ -74,25 +138,42 @@ ENERGY_LEVELS = ["depleted", "low", "moderate", "high"]
 
 def generate_emotion_embedding(text=None, use_openai=False):
     """
-    Generate emotion embedding vector
+    Generate emotion embedding vector with multiple backends
+    
+    Priority order:
+    1. OpenAI/OpenRouter API (if API key provided)
+    2. Sentence Transformers (free local model)
+    3. Synthetic (random fallback)
     
     Args:
-        text: Optional text to embed (for real OpenAI embeddings)
-        use_openai: Whether to use OpenAI API (requires API key)
+        text: Optional text to embed
+        use_openai: Whether to try API first
     
     Returns:
         Normalized embedding vector
     """
-    if use_openai and USE_OPENAI and text:
-        try:
-            response = openai_client.embeddings.create(
-                model="text-embedding-3-small",  # 1536 dimensions
-                input=text
-            )
-            embedding = np.array(response.data[0].embedding)
-            return embedding / np.linalg.norm(embedding)  # Normalize
-        except Exception as e:
-            print(f"OpenAI API error: {e}, falling back to synthetic")
+    if text:
+        # Try API first (OpenAI or OpenRouter)
+        if use_openai and USE_OPENAI:
+            try:
+                model = "openai/text-embedding-3-small" if using_openrouter else "text-embedding-3-small"
+                
+                response = openai_client.embeddings.create(
+                    model=model,
+                    input=text
+                )
+                embedding = np.array(response.data[0].embedding)
+                return embedding / np.linalg.norm(embedding)  # Normalize
+            except Exception as e:
+                print(f"API error: {e}, falling back...")
+        
+        # Try Sentence Transformers (FREE local model)
+        if sentence_model is not None:
+            try:
+                embedding = sentence_model.encode(text, convert_to_numpy=True)
+                return embedding / np.linalg.norm(embedding)  # Normalize
+            except Exception as e:
+                print(f"Sentence Transformer error: {e}, falling back...")
     
     # Fallback: synthetic embedding for testing
     vec = np.random.rand(len(EMOTION_DIMENSIONS))
@@ -720,7 +801,16 @@ if __name__ == "__main__":
     print("\n" + "="*70)
     print("DHA MATCHING ALGORITHM v3 - PSYCHOLOGICALLY SMART + LEARNING")
     print("="*70)
-    print(f"Mode: {'OpenAI Embeddings' if USE_OPENAI else 'Synthetic Embeddings'}")
+    
+    # Show embedding mode
+    mode_display = {
+        "openai": "OpenAI Embeddings (text-embedding-3-small, 1536D)",
+        "openrouter": "OpenRouter → OpenAI Embeddings (text-embedding-3-small, 1536D)",
+        "sentence_transformers": "🆓 FREE - Sentence Transformers (all-MiniLM-L6-v2, 384D)",
+        "synthetic": "Synthetic (Random, for testing only)"
+    }
+    
+    print(f"Embedding Mode: {mode_display.get(EMBEDDING_MODE, 'Unknown')}")
     print(f"Learned Model: {'Active' if learned_matcher.is_trained else 'Not trained yet'}")
     
     # Generate synthetic helper database

@@ -41,20 +41,48 @@ score = 0.35 × emotional_similarity +
 
 ```bash
 pip install numpy faker openai lightgbm pandas scikit-learn
+
+# Optional: For FREE local embeddings (no API key needed)
+pip install sentence-transformers
 ```
 
-## 🔑 Setup
+## 🔑 Embedding Options (3 Modes)
 
-### With OpenAI Embeddings (Recommended)
+### Option 1: 🆓 FREE - Sentence Transformers (Recommended for Testing)
+- **Cost:** $0 (runs on your computer)
+- **Quality:** High (384D semantic embeddings)
+- **Speed:** Fast (local processing)
+- **Privacy:** Data never leaves your machine
+
 ```bash
-export OPENAI_API_KEY='your-api-key-here'
+# No setup needed! Just run:
+python local_test_matcher.py
+
+# Or if you have issues with Sentence Transformers:
+SKIP_SENTENCE_TRANSFORMERS=1 python local_test_matcher.py
+```
+
+### Option 2: OpenAI API (Best Quality)
+- **Cost:** $0.02 per million tokens (~$0.004 for 1000 profiles)
+- **Quality:** Highest (1536D embeddings)
+- **Setup:** Requires OpenAI account
+
+```bash
+export OPENAI_API_KEY='sk-proj-...'
 python local_test_matcher.py
 ```
 
-### Without OpenAI (Synthetic Mode)
+### Option 3: OpenRouter (Easiest Setup)
+- **Cost:** Same as OpenAI ($0.02/M)
+- **Quality:** Same (uses OpenAI's model)
+- **Setup:** Single API key for multiple providers
+
 ```bash
+export OPENROUTER_API_KEY='sk-or-...'
 python local_test_matcher.py
 ```
+
+See [OPENROUTER_SETUP.md](OPENROUTER_SETUP.md) for detailed OpenRouter instructions.
 
 ## 🎯 Usage
 
