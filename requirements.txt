@@ -1,0 +1,6 @@
+RealtimeSTT
+rich
+pyautogui
+colorama
+torch
+torchaudio
